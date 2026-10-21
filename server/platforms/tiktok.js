@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import { config } from '../config.js';
+import { getCredentials } from '../db.js';
 import { request } from './http.js';
 
 // TikTok Content Posting API.
 // mode=inbox  — видео уходит во «Входящие» TikTok, пользователь публикует его одним нажатием в приложении.
 //               Работает без аудита приложения.
 // mode=direct — сразу публичный пост. Требует пройденного аудита TikTok, иначе доступно только SELF_ONLY.
-const { clientKey, clientSecret, mode } = config.tiktok;
+const creds = () => getCredentials('tiktok');
+const mode = config.tiktokMode;
 const API = 'https://open.tiktokapis.com/v2';
 const MB = 1024 * 1024;
 
@@ -18,7 +20,7 @@ function chunking(size) {
 }
 
 async function token(form) {
-  const { data } = await request(`${API}/oauth/token/`, { form: { client_key: clientKey, client_secret: clientSecret, ...form } });
+  const { data } = await request(`${API}/oauth/token/`, { form: { client_key: creds().id, client_secret: creds().secret, ...form } });
   if (data.error) throw new Error(`TikTok: ${data.error_description || data.error}`);
   return {
     access_token: data.access_token,
@@ -31,12 +33,12 @@ export default {
   id: 'tiktok',
   label: 'TikTok',
   short: 'TT',
-  configured: () => Boolean(clientKey && clientSecret),
+  configured: () => Boolean(creds().id && creds().secret),
   note: () => (mode === 'direct' ? null : 'Видео придёт во «Входящие» TikTok — опубликуйте его одним нажатием'),
 
   authUrl({ state, redirectUri }) {
     const q = new URLSearchParams({
-      client_key: clientKey,
+      client_key: creds().id,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'user.info.basic,video.upload,video.publish,video.list',

@@ -1,13 +1,13 @@
 import fs from 'node:fs';
-import { config } from '../config.js';
+import { getCredentials } from '../db.js';
 import { request } from './http.js';
 
 // X API v2, OAuth 2.0 с PKCE. Загрузка видео кусками через /2/media/upload.
-const { clientId, clientSecret } = config.x;
+const creds = () => getCredentials('x');
 const API = 'https://api.x.com/2';
 const CHUNK = 4 * 1024 * 1024;
 
-const basic = () => `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+const basic = () => `Basic ${Buffer.from(`${creds().id}:${creds().secret}`).toString('base64')}`;
 
 async function token(form) {
   const { data } = await request(`${API}/oauth2/token`, { form, headers: { Authorization: basic() } });
@@ -25,12 +25,12 @@ export default {
   label: 'X (Twitter)',
   short: 'X',
   pkce: true,
-  configured: () => Boolean(clientId && clientSecret),
+  configured: () => Boolean(creds().id && creds().secret),
 
   authUrl({ state, redirectUri, challenge }) {
     const q = new URLSearchParams({
       response_type: 'code',
-      client_id: clientId,
+      client_id: creds().id,
       redirect_uri: redirectUri,
       scope: 'tweet.read tweet.write users.read media.write offline.access',
       state,

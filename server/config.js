@@ -35,9 +35,13 @@ export const config = {
   appPassword: e.APP_PASSWORD || '',
   secret: loadSecret(),
   demo: e.DEMO_MODE === '1',
-  google: { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET },
-  instagram: { appId: e.INSTAGRAM_APP_ID, appSecret: e.INSTAGRAM_APP_SECRET },
-  tiktok: { clientKey: e.TIKTOK_CLIENT_KEY, clientSecret: e.TIKTOK_CLIENT_SECRET, mode: e.TIKTOK_MODE || 'inbox' },
-  x: { clientId: e.X_CLIENT_ID, clientSecret: e.X_CLIENT_SECRET },
+  // Ключи приложений соцсетей можно задать здесь или прямо в интерфейсе (тогда они хранятся в базе)
+  envCredentials: {
+    youtube: { id: e.GOOGLE_CLIENT_ID, secret: e.GOOGLE_CLIENT_SECRET },
+    instagram: { id: e.INSTAGRAM_APP_ID, secret: e.INSTAGRAM_APP_SECRET },
+    tiktok: { id: e.TIKTOK_CLIENT_KEY, secret: e.TIKTOK_CLIENT_SECRET },
+    x: { id: e.X_CLIENT_ID, secret: e.X_CLIENT_SECRET },
+  },
+  tiktokMode: e.TIKTOK_MODE || 'inbox',
   telegram: { token: e.TELEGRAM_BOT_TOKEN, chatId: e.TELEGRAM_CHAT_ID },
 };

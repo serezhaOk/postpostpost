@@ -3,3 +3,5 @@ data/
 .env
 *.log
 _site/
+deploy/data/
+deploy/.env
