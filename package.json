@@ -1,0 +1,13 @@
+{
+  "name": "postpostpost",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Автопостинг коротких видео в YouTube Shorts, Instagram Reels, TikTok и X по расписанию",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "DEMO_MODE=1 node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}
