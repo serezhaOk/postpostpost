@@ -15,7 +15,14 @@ if [ -z "$project" ]; then
 fi
 echo "→ Проект: $project, зона: $ZONE"
 
-gcloud services enable compute.googleapis.com --quiet
+if ! gcloud services list --enabled --filter=name:compute.googleapis.com --format='value(name)' 2>/dev/null | grep -q compute; then
+  echo "→ Включаю Compute Engine — на новом проекте это 1–3 минуты, в терминале будет тихо"
+  if ! gcloud services enable compute.googleapis.com --quiet; then
+    echo "Не удалось включить Compute Engine. Обычно это значит, что к проекту не привязан платёжный аккаунт:"
+    echo "https://console.cloud.google.com/billing/linkedaccount?project=$project"
+    exit 1
+  fi
+fi
 
 # Постоянный IP: без него адрес сервера сменится при перезапуске, и вход в соцсети сломается
 if ! gcloud compute addresses describe "$NAME-ip" --region "$REGION" >/dev/null 2>&1; then

@@ -103,6 +103,8 @@
     return {
       demo: true,
       https: true,
+      publicUrl: 'https://ваш-сервер',
+      apiToken: Boolean(db.apiToken),
       settings: { ...db.settings },
       nextSlot: nextSlot(),
       platforms: PLATFORMS.map((p) => ({
@@ -167,6 +169,10 @@
         if (body.slots) db.settings.slots = [...new Set(body.slots)].sort();
         if (body.tz) db.settings.tz = body.tz;
         return state();
+      }
+      if (path === '/api/token') {
+        db.apiToken = method === 'POST';
+        return method === 'POST' ? { token: 'ppp_demo_token', state: state() } : state();
       }
       if ((m = path.match(/^\/api\/credentials\/(\w+)$/)) && method === 'PUT') {
         if (!String(body.id || '').trim() || (!body.secret && !db.credentials[m[1]])) fail('Заполните оба поля');
