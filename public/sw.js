@@ -4,7 +4,7 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (event.request.method === 'POST' && url.pathname === '/share') {
+  if (event.request.method === 'POST' && url.pathname.endsWith('/share')) {
     event.respondWith((async () => {
       const form = await event.request.formData();
       const file = form.get('video');
@@ -14,7 +14,7 @@ self.addEventListener('fetch', (event) => {
           headers: { 'Content-Type': file.type || 'video/mp4', 'X-Name': encodeURIComponent(file.name || 'video.mp4') },
         }));
       }
-      return Response.redirect('/?shared=1', 303);
+      return Response.redirect('./?shared=1', 303);
     })());
   }
 });
