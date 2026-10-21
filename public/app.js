@@ -83,7 +83,7 @@ async function refresh() {
 
 function go(view) {
   store.view = view;
-  history.replaceState(null, '', view === 'queue' ? '/' : `/#${view}`);
+  history.replaceState(null, '', view === 'queue' ? location.pathname : `${location.pathname}#${view}`);
   window.scrollTo(0, 0);
   if (view === 'stats') store.stats = null;
   render();
@@ -461,7 +461,7 @@ picker.addEventListener('change', () => picker.files[0] && openCompose(picker.fi
 // Видео, присланное через «Поделиться» из галереи (Android): сразу открываем публикацию
 async function takeSharedVideo() {
   if (!new URLSearchParams(location.search).has('shared') || !('caches' in window)) return;
-  history.replaceState(null, '', '/');
+  history.replaceState(null, '', location.pathname);
   const cache = await caches.open('share');
   const res = await cache.match('/shared-video');
   if (!res) return;
@@ -475,8 +475,9 @@ async function takeSharedVideo() {
 (async () => {
   const hash = location.hash.slice(1).split('?')[0];
   if (hash === 'settings' || hash === 'stats') store.view = hash;
-  if (!window.PPP_DEMO && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if (!window.PPP_DEMO && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   await refresh();
   if (store.state) takeSharedVideo().catch((err) => toast(err.message));
+  window.pppRefresh = refresh;
   setInterval(() => document.visibilityState === 'visible' && store.state && refresh(), 10_000);
 })();
