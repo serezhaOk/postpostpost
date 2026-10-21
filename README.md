@@ -21,7 +21,13 @@
 
 ## Запуск на сервере
 
-Одна команда на чистом VPS с Ubuntu. Подробности — в [deploy/README.md](deploy/README.md).
+Бесплатно в Google Cloud — одна команда в Cloud Shell. Пошагово — в [deploy/README.md](deploy/README.md).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/serezhaOk/postpostpost/main/deploy/gcloud.sh | bash
+```
+
+Или на любом VPS с Ubuntu:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/serezhaOk/postpostpost/main/deploy/install.sh | sudo bash
