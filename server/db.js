@@ -40,6 +40,11 @@ db.exec(`
     stats_at INTEGER
   );
   CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
+  CREATE TABLE IF NOT EXISTS credentials (
+    platform TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    client_secret TEXT NOT NULL
+  );
 `);
 
 const DEFAULT_SETTINGS = { slots: ['18:00'], tz: 'Europe/Moscow' };
@@ -77,6 +82,20 @@ export function saveAccount(platform, acc) {
 
 export function deleteAccount(platform) {
   db.prepare('DELETE FROM accounts WHERE platform = ?').run(platform);
+}
+
+// Ключи приложения разработчика: из интерфейса (база) важнее, чем из .env
+export function getCredentials(platform) {
+  const row = db.prepare('SELECT * FROM credentials WHERE platform = ?').get(platform);
+  if (row) return { id: row.client_id, secret: decrypt(row.client_secret), source: 'app' };
+  const env = config.envCredentials[platform] || {};
+  return { id: env.id, secret: env.secret, source: env.id ? 'env' : null };
+}
+
+export function saveCredentials(platform, id, secret) {
+  db.prepare(`INSERT INTO credentials(platform, client_id, client_secret) VALUES (?, ?, ?)
+    ON CONFLICT(platform) DO UPDATE SET client_id = excluded.client_id, client_secret = excluded.client_secret`)
+    .run(platform, id, encrypt(secret));
 }
 
 export function updateJob(id, fields) {

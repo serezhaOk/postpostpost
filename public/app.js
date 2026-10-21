@@ -167,19 +167,35 @@ function viewSettings() {
 
   const accounts = platforms.map((p) => {
     let action;
-    if (p.connected) action = `<button class="btn-sm" data-disconnect="${p.id}">Отключить</button>`;
-    else if (p.configured) action = `<a class="btn-sm dark" href="${backend.authUrl(p.id)}">Подключить</a>`;
-    else action = '<span class="row-sub">нет ключей API</span>';
-    const sub = p.connected ? esc(p.account) : 'Не подключено';
+    let sub;
+    if (p.reconnect) {
+      action = `<a class="btn-sm dark" href="${backend.authUrl(p.id)}">Переподключить</a>`;
+      sub = '⚠️ Доступ истёк';
+    } else if (p.connected) {
+      action = `<button class="btn-sm" data-disconnect="${p.id}">Отключить</button>`;
+      sub = esc(p.account) + (p.note ? `<br>${esc(p.note)}` : '');
+    } else if (p.configured) {
+      action = `<a class="btn-sm dark" href="${backend.authUrl(p.id)}">Подключить</a>`;
+      sub = 'Ключи есть, аккаунт не подключён';
+    } else {
+      action = `<button class="btn-sm dark" data-setup="${p.id}">Настроить</button>`;
+      sub = 'Нужны ключи разработчика';
+    }
     return `<div class="row">
-      <div class="badge ${p.connected ? 'on' : ''}">${esc(p.short)}</div>
-      <div class="row-main"><div class="row-title">${esc(p.label)}</div><div class="row-sub">${sub}${p.note && p.connected ? `<br>${esc(p.note)}` : ''}</div></div>
+      <button class="row-tap" data-setup="${p.id}" aria-label="Ключи ${esc(p.label)}">
+        <div class="badge ${p.connected && !p.reconnect ? 'on' : ''}">${esc(p.short)}</div>
+        <div class="row-main"><div class="row-title">${esc(p.label)}</div><div class="row-sub">${sub}</div></div>
+      </button>
       ${action}</div>`;
   }).join('');
+  const httpsWarning = !demo && !store.state.https
+    ? '<div class="banner error-banner">Сервер открыт не по HTTPS — соцсети не разрешат вход. Разверните его по инструкции из deploy/README.md.</div>'
+    : '';
 
   const slots = settings.slots.map((s) => `<button class="chip on" data-slot-remove="${s}">${s}<span class="x">✕</span></button>`).join('');
 
   return `<div class="wrap">${header('Настройки')}
+    ${httpsWarning}
     ${err ? `<div class="banner error-banner">Не удалось подключить: ${esc(err)}</div>` : ''}
     <h2>Соцсети</h2>
     <div class="rows">${accounts}
@@ -353,6 +369,105 @@ function openCompose(file) {
   startUpload();
 }
 
+// Пошаговые инструкции: где взять ключи разработчика для каждой соцсети
+const SETUP = {
+  youtube: {
+    time: '≈10 минут',
+    idLabel: 'Client ID',
+    secretLabel: 'Client secret',
+    steps: [
+      'Создайте проект в <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud</a>.',
+      'Включите <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3</a>.',
+      'В <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">OAuth consent screen</a> выберите тип External, затем нажмите «Publish app». Без публикации вход слетает каждые 7 дней.',
+      'В <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a>: Create credentials → OAuth client ID → Web application. В Authorized redirect URIs вставьте:{redirect}',
+      'Скопируйте Client ID и Client secret сюда.',
+    ],
+    warning: 'Пока проект не прошёл <a href="https://support.google.com/youtube/contact/yt_api_form" target="_blank" rel="noopener">аудит YouTube API</a>, Google делает загруженные видео приватными. Аудит бесплатный, подайте заявку сразу.',
+  },
+  instagram: {
+    time: '≈10 минут',
+    idLabel: 'Instagram App ID',
+    secretLabel: 'Instagram App Secret',
+    steps: [
+      'В приложении Instagram переключите аккаунт на профессиональный: «Автор» или «Бизнес».',
+      'На <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">Meta for Developers</a> создайте приложение со сценарием «Manage messaging & content on Instagram».',
+      'Instagram → API setup with Instagram login: добавьте свой аккаунт в Instagram testers и примите приглашение в Instagram (Настройки → Приложения и сайты).',
+      'В «Set up Instagram business login» укажите Redirect URL:{redirect}',
+      'Скопируйте сюда <b>Instagram</b> App ID и App Secret. Это не то же самое, что Facebook App ID.',
+    ],
+  },
+  tiktok: {
+    time: '≈15 минут',
+    idLabel: 'Client key',
+    secretLabel: 'Client secret',
+    steps: [
+      'На <a href="https://developers.tiktok.com/apps" target="_blank" rel="noopener">TikTok for Developers</a> создайте приложение (Connect an app).',
+      'Добавьте продукты Login Kit и Content Posting API. Scopes: user.info.basic, video.upload, video.publish, video.list.',
+      'В Login Kit → Web укажите Redirect URI:{redirect}',
+      'Пока приложение не прошло проверку, включите Sandbox и добавьте свой аккаунт в Target users. У Sandbox свои ключи — берите их.',
+      'Скопируйте Client key и Client secret сюда.',
+    ],
+    warning: 'Без аудита TikTok видео будут приходить во «Входящие» TikTok — опубликуете их одним нажатием в приложении.',
+  },
+  x: {
+    time: '≈5 минут',
+    idLabel: 'OAuth 2.0 Client ID',
+    secretLabel: 'Client Secret',
+    steps: [
+      'На <a href="https://developer.x.com/en/portal/dashboard" target="_blank" rel="noopener">X Developer Portal</a> откройте приложение → User authentication settings → Set up.',
+      'Права: Read and write. Тип: Web App (Confidential client).',
+      'Callback URI:{redirect}',
+      'Keys and tokens → OAuth 2.0 Client ID и Client Secret — сюда.',
+    ],
+    warning: 'Публикация через API X платная: нужен подходящий тариф или кредиты в Developer Portal.',
+  },
+};
+
+function copyText(text) {
+  (navigator.clipboard?.writeText(text) || Promise.reject())
+    .then(() => toast('Скопировано'))
+    .catch(() => prompt('Скопируйте адрес:', text));
+}
+
+function openSetup(id) {
+  const p = platformById(id);
+  const g = SETUP[id];
+  if (!g) return;
+  const redirect = `<div class="copy-row"><code>${esc(p.redirectUri)}</code><button class="btn-sm" data-copy>Копировать</button></div>`;
+  const fromEnv = p.keysFrom === 'env';
+  const sheet = openSheet(`
+    <div class="sheet-title">${esc(p.label)}</div>
+    <p class="hint" style="margin:0 0 4px">Один раз, ${g.time}. Ключи хранятся на вашем сервере в зашифрованном виде.</p>
+    <ol class="steps">${g.steps.map((st) => `<li>${st.replace('{redirect}', redirect)}</li>`).join('')}</ol>
+    ${g.warning ? `<div class="banner">${g.warning}</div>` : ''}
+    ${fromEnv ? '<div class="banner">Сейчас ключи берутся из файла .env на сервере. Сохранённые здесь заменят их.</div>' : ''}
+    <label class="lbl">${esc(g.idLabel)}<input class="field" name="id" autocomplete="off" spellcheck="false" value="${esc(p.clientId)}"></label>
+    <label class="lbl">${esc(g.secretLabel)}<input class="field" name="secret" type="password" autocomplete="off"
+      placeholder="${p.configured ? 'сохранён — оставьте пустым' : ''}"></label>
+    <div class="actions"><button class="btn" data-action="save">${p.connected ? 'Сохранить' : 'Сохранить и подключить'}</button></div>`,
+  async (e) => {
+    if (e.target.closest('[data-copy]')) return copyText(p.redirectUri);
+    if (!e.target.closest('[data-action=save]')) return;
+    try {
+      store.state = await backend.call('PUT', `/api/credentials/${id}`, {
+        id: sheet.querySelector('[name=id]').value,
+        secret: sheet.querySelector('[name=secret]').value,
+      });
+      closeSheet();
+      render();
+      if (p.connected) return toast('Ключи сохранены');
+      // Сразу ведём на вход в соцсеть — без лишнего нажатия
+      const a = document.createElement('a');
+      a.href = backend.authUrl(id);
+      document.body.append(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+}
+
 function openPost(id) {
   const p = store.state.posts.find((x) => x.id === id);
   if (!p) return;
@@ -423,13 +538,14 @@ async function saveSettings(patch) {
 
 document.addEventListener('click', async (e) => {
   if (e.target.closest('.sheet')) return;
-  const t = e.target.closest('[data-go],[data-action],[data-post],[data-disconnect],[data-slot-remove],[data-tz]');
+  const t = e.target.closest('[data-go],[data-action],[data-post],[data-disconnect],[data-setup],[data-slot-remove],[data-tz]');
   if (!t) return;
   const d = t.dataset;
   if (d.go) return go(d.go);
   if (d.post) return openPost(Number(d.post));
   if (d.action === 'pick') { picker.value = ''; return picker.click(); }
   if (d.action === 'logout') { await backend.call('POST', '/api/logout'); return renderLogin(); }
+  if (d.setup) return openSetup(d.setup);
   if (d.disconnect) {
     if (!confirm('Отключить аккаунт? Запланированные посты на эту площадку не выйдут.')) return;
     store.state = await backend.call('DELETE', `/api/accounts/${d.disconnect}`);

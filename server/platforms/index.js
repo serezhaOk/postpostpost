@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { getAccount, saveAccount } from '../db.js';
+import { notify } from '../notify.js';
 import youtube from './youtube.js';
 import instagram from './instagram.js';
 import tiktok from './tiktok.js';
@@ -18,7 +19,7 @@ function demo(real) {
     connect: async () => ({ name: `demo_${real.id}`, access_token: 'demo' }),
     publish: async () => ({ status: 'processing', state: { at: Date.now() } }),
     check: async ({ job }) => {
-      if (real.id === 'tiktok' && config.tiktok.mode !== 'direct') return { status: 'draft' };
+      if (real.id === 'tiktok' && config.tiktokMode !== 'direct') return { status: 'draft' };
       const id = String(job.id);
       return { status: 'done', remote_id: id, url: null };
     },
@@ -44,8 +45,20 @@ export async function accountFor(id) {
   const acc = getAccount(id);
   if (!acc) throw new Error('Аккаунт не подключён');
   const p = byId[id];
+  if (acc.extra.reconnect) throw new Error(`Доступ к ${p.label} истёк — переподключите аккаунт в настройках`);
   if (p.refresh && acc.expires_at && acc.expires_at < Date.now() + 5 * 60_000) {
-    Object.assign(acc, await p.refresh(acc));
+    try {
+      Object.assign(acc, await p.refresh(acc));
+    } catch (err) {
+      // 400/401 при обновлении — пользователь отозвал доступ или токен протух: нужен повторный вход
+      if (err.status === 400 || err.status === 401) {
+        acc.extra = { ...acc.extra, reconnect: true };
+        saveAccount(id, acc);
+        await notify(`⚠️ ${p.label}: доступ истёк. Откройте настройки postpostpost и подключите аккаунт заново.`);
+        throw new Error(`Доступ к ${p.label} истёк — переподключите аккаунт в настройках`);
+      }
+      throw err;
+    }
     saveAccount(id, acc);
   }
   return acc;

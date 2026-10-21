@@ -15,7 +15,9 @@
 
   const db = {
     settings: { slots: ['12:00', '18:00'], tz: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    accounts: { youtube: '@my_channel', instagram: '@my.reels', tiktok: 'my_tiktok' }, // X не подключён — можно «подключить»
+    accounts: { youtube: '@my_channel', instagram: '@my.reels', tiktok: 'my_tiktok' },
+    // У X нет ключей — в демо можно пройти настройку целиком
+    credentials: { youtube: '1234-demo.apps.googleusercontent.com', instagram: '987654321', tiktok: 'awdemo123' },
     posts: [],
     files: new Map(),
     seq: 1,
@@ -100,10 +102,13 @@
   function state() {
     return {
       demo: true,
+      https: true,
       settings: { ...db.settings },
       nextSlot: nextSlot(),
       platforms: PLATFORMS.map((p) => ({
-        ...p, note: p.note || null, configured: true, connected: Boolean(db.accounts[p.id]), account: db.accounts[p.id] || null,
+        ...p, note: p.note || null, configured: Boolean(db.credentials[p.id]),
+        connected: Boolean(db.accounts[p.id]), account: db.accounts[p.id] || null, reconnect: false,
+        redirectUri: `https://ваш-сервер/auth/${p.id}/callback`, clientId: db.credentials[p.id] || '', keysFrom: db.credentials[p.id] ? 'app' : null,
       })),
       posts: [...db.posts]
         .filter((p) => p.jobs.length)
@@ -161,6 +166,11 @@
       if (method === 'PUT' && path === '/api/settings') {
         if (body.slots) db.settings.slots = [...new Set(body.slots)].sort();
         if (body.tz) db.settings.tz = body.tz;
+        return state();
+      }
+      if ((m = path.match(/^\/api\/credentials\/(\w+)$/)) && method === 'PUT') {
+        if (!String(body.id || '').trim() || (!body.secret && !db.credentials[m[1]])) fail('Заполните оба поля');
+        db.credentials[m[1]] = body.id.trim();
         return state();
       }
       if ((m = path.match(/^\/api\/accounts\/(\w+)$/)) && method === 'DELETE') {

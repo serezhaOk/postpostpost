@@ -1,19 +1,19 @@
 import fs from 'node:fs';
-import { config } from '../config.js';
+import { getCredentials } from '../db.js';
 import { request, titleFrom } from './http.js';
 
-const { clientId, clientSecret } = config.google;
+const creds = () => getCredentials('youtube');
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 export default {
   id: 'youtube',
   label: 'YouTube Shorts',
   short: 'YT',
-  configured: () => Boolean(clientId && clientSecret),
+  configured: () => Boolean(creds().id && creds().secret),
 
   authUrl({ state, redirectUri }) {
     const q = new URLSearchParams({
-      client_id: clientId,
+      client_id: creds().id,
       redirect_uri: redirectUri,
       response_type: 'code',
       access_type: 'offline',
@@ -26,7 +26,7 @@ export default {
 
   async connect({ code, redirectUri }) {
     const { data: t } = await request(TOKEN_URL, {
-      form: { code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' },
+      form: { code, client_id: creds().id, client_secret: creds().secret, redirect_uri: redirectUri, grant_type: 'authorization_code' },
     });
     const { data: ch } = await request('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', { token: t.access_token });
     return {
@@ -39,7 +39,7 @@ export default {
 
   async refresh(acc) {
     const { data: t } = await request(TOKEN_URL, {
-      form: { client_id: clientId, client_secret: clientSecret, refresh_token: acc.refresh_token, grant_type: 'refresh_token' },
+      form: { client_id: creds().id, client_secret: creds().secret, refresh_token: acc.refresh_token, grant_type: 'refresh_token' },
     });
     return { access_token: t.access_token, expires_at: Date.now() + t.expires_in * 1000 };
   },

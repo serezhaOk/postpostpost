@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { config } from './config.js';
-import { db, getSettings, saveSettings, saveAccount, deleteAccount, getAccount, listPosts } from './db.js';
+import { db, getSettings, saveSettings, saveAccount, deleteAccount, getAccount, listPosts, getCredentials, saveCredentials } from './db.js';
 import { platforms, byId } from './platforms/index.js';
 import { startScheduler, tick } from './scheduler.js';
 import { sign, safeEqual, randomId, pkcePair } from './crypto.js';
@@ -88,11 +88,17 @@ function state() {
     demo: config.demo,
     settings,
     nextSlot: nextFreeSlot(settings, takenSlots()),
+    https: config.publicUrl.startsWith('https://'),
     platforms: platforms.map((p) => {
       const acc = getAccount(p.id);
+      const creds = getCredentials(p.id);
       return {
         id: p.id, label: p.label, short: p.short, configured: p.configured(),
         connected: Boolean(acc), account: acc?.name || null, note: p.note?.() || null,
+        reconnect: Boolean(acc?.extra?.reconnect),
+        redirectUri: redirectUri(p.id),
+        clientId: creds.id || '',
+        keysFrom: creds.source,
       };
     }),
     posts: listPosts(),
@@ -238,6 +244,18 @@ async function api(req, res, url) {
       try { new Intl.DateTimeFormat('en', { timeZone: body.tz }); patch.tz = body.tz; } catch { /* неизвестный пояс — игнорируем */ }
     }
     saveSettings(patch);
+    return send(res, 200, state());
+  }
+
+  // Ключи приложения разработчика вводятся прямо в интерфейсе
+  if ((mm = m(/^\/api\/credentials\/(\w+)$/)) && req.method === 'PUT') {
+    if (!byId[mm[1]]) return send(res, 404, { error: 'Нет такой площадки' });
+    const { id, secret } = await readJson(req);
+    const cleanId = String(id || '').trim();
+    // Пустой секрет при уже сохранённых ключах — значит, меняют только ID
+    const cleanSecret = String(secret || '').trim() || getCredentials(mm[1]).secret;
+    if (!cleanId || !cleanSecret) return send(res, 400, { error: 'Заполните оба поля' });
+    saveCredentials(mm[1], cleanId, cleanSecret);
     return send(res, 200, state());
   }
 

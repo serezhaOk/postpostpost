@@ -1,0 +1,8 @@
+.git
+data
+deploy/data
+deploy/.env
+demo
+docs
+test
+_site

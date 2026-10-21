@@ -1,19 +1,19 @@
-import { config } from '../config.js';
+import { getCredentials } from '../db.js';
 import { request } from './http.js';
 
 // Instagram API with Instagram Login: нужен профессиональный аккаунт (Business или Creator)
-const { appId, appSecret } = config.instagram;
+const creds = () => getCredentials('instagram');
 const GRAPH = 'https://graph.instagram.com/v23.0';
 
 export default {
   id: 'instagram',
   label: 'Instagram Reels',
   short: 'IG',
-  configured: () => Boolean(appId && appSecret),
+  configured: () => Boolean(creds().id && creds().secret),
 
   authUrl({ state, redirectUri }) {
     const q = new URLSearchParams({
-      client_id: appId,
+      client_id: creds().id,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'instagram_business_basic,instagram_business_content_publish',
@@ -24,10 +24,10 @@ export default {
 
   async connect({ code, redirectUri }) {
     const { data: short } = await request('https://api.instagram.com/oauth/access_token', {
-      form: { client_id: appId, client_secret: appSecret, grant_type: 'authorization_code', redirect_uri: redirectUri, code },
+      form: { client_id: creds().id, client_secret: creds().secret, grant_type: 'authorization_code', redirect_uri: redirectUri, code },
     });
     // Обмениваем короткий токен (1 час) на долгий (60 дней)
-    const q = new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: appSecret, access_token: short.access_token });
+    const q = new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: creds().secret, access_token: short.access_token });
     const { data: long } = await request(`https://graph.instagram.com/access_token?${q}`);
     const { data: me } = await request(`${GRAPH}/me?fields=user_id,username`, { token: long.access_token });
     return {
