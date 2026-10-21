@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { config } from './config.js';
 import { db, getSettings, saveSettings, saveAccount, deleteAccount, getAccount, listPosts, getCredentials, saveCredentials } from './db.js';
@@ -14,6 +15,7 @@ const SESSION_COOKIE = 'ppp';
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
+  '.mjs': 'text/javascript; charset=utf-8', '.md': 'text/markdown; charset=utf-8',
   '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4v': 'video/mp4',
 };
 
@@ -24,8 +26,16 @@ function sessionToken() {
   return `${exp}.${sign(`session:${exp}`)}`;
 }
 
+// Ключ API для Claude и других программ: хранится только хэш, сам ключ показывается один раз
+const hashToken = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+
 function isAuthed(req) {
   if (!config.appPassword) return true;
+  const bearer = /^Bearer\s+(\S+)$/.exec(req.headers.authorization || '')?.[1];
+  if (bearer) {
+    const { apiTokenHash } = getSettings();
+    return Boolean(apiTokenHash) && safeEqual(hashToken(bearer), apiTokenHash);
+  }
   const cookie = Object.fromEntries((req.headers.cookie || '').split(';').map((c) => c.trim().split('=')));
   const [exp, sig] = (cookie[SESSION_COOKIE] || '').split('.');
   return Number(exp) > Date.now() && safeEqual(sig, sign(`session:${exp}`));
@@ -83,9 +93,11 @@ function takenSlots() {
 }
 
 function state() {
-  const settings = getSettings();
+  const { apiTokenHash, ...settings } = getSettings();
   return {
     demo: config.demo,
+    publicUrl: config.publicUrl,
+    apiToken: Boolean(apiTokenHash),
     settings,
     nextSlot: nextFreeSlot(settings, takenSlots()),
     https: config.publicUrl.startsWith('https://'),
@@ -256,6 +268,16 @@ async function api(req, res, url) {
     const cleanSecret = String(secret || '').trim() || getCredentials(mm[1]).secret;
     if (!cleanId || !cleanSecret) return send(res, 400, { error: 'Заполните оба поля' });
     saveCredentials(mm[1], cleanId, cleanSecret);
+    return send(res, 200, state());
+  }
+
+  if (pathname === '/api/token' && req.method === 'POST') {
+    const token = `ppp_${randomId(24)}`;
+    saveSettings({ apiTokenHash: hashToken(token) });
+    return send(res, 200, { token, state: state() });
+  }
+  if (pathname === '/api/token' && req.method === 'DELETE') {
+    saveSettings({ apiTokenHash: null });
     return send(res, 200, state());
   }
 

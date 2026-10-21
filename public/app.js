@@ -201,6 +201,17 @@ function viewSettings() {
     <div class="rows">${accounts}
       <div class="row"><div class="badge">R</div><div class="row-main"><div class="row-title">Reddit</div><div class="row-sub">Скоро</div></div></div>
     </div>
+    <h2>Claude</h2>
+    <div class="rows">
+      <div class="row"><div class="badge ${store.state.apiToken ? 'on' : ''}">AI</div>
+        <div class="row-main"><div class="row-title">${store.state.apiToken ? 'Claude подключён' : 'Планировать через Claude'}</div>
+          <div class="row-sub">${store.state.apiToken ? 'Попросите Claude запланировать видео из папки' : 'Claude на компьютере сможет ставить видео в очередь по вашей просьбе'}</div></div>
+        ${store.state.apiToken
+    ? '<button class="btn-sm" data-action="token-revoke">Отключить</button>'
+    : '<button class="btn-sm dark" data-action="token-new">Подключить</button>'}
+      </div>
+      ${store.state.apiToken ? '<div class="row"><div class="row-main row-sub">Потеряли сообщение для Claude?</div><button class="btn-sm" data-action="token-new">Новый ключ</button></div>' : ''}
+    </div>
     <h2>Публиковать каждый день в</h2>
     <div class="rows">
       <div class="slots">${slots}<input class="time-input" type="time" data-slot-add aria-label="Добавить время"></div>
@@ -468,6 +479,32 @@ function openSetup(id) {
   });
 }
 
+// Ключ для Claude: показываем один раз вместе с готовым сообщением для Claude Code
+async function connectClaude() {
+  try {
+    const { token, state } = await backend.call('POST', '/api/token');
+    store.state = state;
+    render();
+    const url = state.publicUrl;
+    const message = `Установи навык postpostpost для автопостинга моих видео и подключись к серверу:\n`
+      + `mkdir -p ~/.claude/skills/postpostpost && cd ~/.claude/skills/postpostpost`
+      + ` && curl -fsSL ${url}/claude/SKILL.md -o SKILL.md && curl -fsSL ${url}/claude/ppp.mjs -o ppp.mjs`
+      + ` && node ppp.mjs login ${url} ${token}`;
+    openSheet(`
+      <div class="sheet-title">Подключить Claude</div>
+      <ol class="steps">
+        <li>Откройте Claude Code на компьютере: в терминале или в приложении Claude.</li>
+        <li>Отправьте ему это сообщение:<div class="copy-row"><code>${esc(message)}</code></div>
+          <div class="actions"><button class="btn" data-copy>Скопировать сообщение</button></div></li>
+        <li>Готово. Дальше просто пишите, например: <i>«запланируй все видео из папки … с описаниями из документа рядом, каждый день в 15:00 по Португалии»</i>.</li>
+      </ol>
+      <div class="banner">В сообщении ключ доступа. Он показывается один раз — никому его не пересылайте. Отключить можно здесь же.</div>`,
+    (e) => { if (e.target.closest('[data-copy]')) copyText(message); });
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
 function openPost(id) {
   const p = store.state.posts.find((x) => x.id === id);
   if (!p) return;
@@ -544,6 +581,15 @@ document.addEventListener('click', async (e) => {
   if (d.go) return go(d.go);
   if (d.post) return openPost(Number(d.post));
   if (d.action === 'pick') { picker.value = ''; return picker.click(); }
+  if (d.action === 'token-new') {
+    if (store.state.apiToken && !confirm('Старый ключ перестанет работать. Создать новый?')) return;
+    return connectClaude();
+  }
+  if (d.action === 'token-revoke') {
+    if (!confirm('Отключить Claude? Он больше не сможет планировать видео.')) return;
+    store.state = await backend.call('DELETE', '/api/token');
+    return render();
+  }
   if (d.action === 'logout') { await backend.call('POST', '/api/logout'); return renderLogin(); }
   if (d.setup) return openSetup(d.setup);
   if (d.disconnect) {
